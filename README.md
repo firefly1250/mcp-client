@@ -7,7 +7,7 @@ npm install
 ## Run
 
 ```sh
-npm run start
+npx tsx src/index.ts
 ```
 
 ## Lint
