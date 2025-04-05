@@ -57,7 +57,8 @@ const TOOLS: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        selector: { type: 'string', description: 'CSS selector for element to click' },
+        x: { type: 'number', description: 'position x to click' },
+        y: { type: 'number', description: 'position y to click' },
       },
       required: ['selector'],
     },
@@ -293,12 +294,12 @@ async function handleToolCall(name: string, args: any): Promise<CallToolResult> 
 
     case 'puppeteer_click':
       try {
-        await page.click(args.selector);
+        await page.mouse.click(args.x, args.y);
         return {
           content: [
             {
               type: 'text',
-              text: `Clicked: ${args.selector}`,
+              text: `Clicked: (${args.x},${args.y})`,
             },
           ],
           isError: false,
