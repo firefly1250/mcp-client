@@ -6,8 +6,10 @@ npm install
 
 ## Run
 
+### tests server and client
+
 ```sh
-npx tsx src/index.ts
+npx tsx src/client-test.ts
 ```
 
 ## Lint
