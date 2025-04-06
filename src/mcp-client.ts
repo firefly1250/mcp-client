@@ -67,10 +67,14 @@ class MCPClient {
     for (let content of response.content) {
       if (content.type === 'text') {
         if (content.text.includes('{"type":"tool_use"')) {
-          //console.warn('Tool use detected in text content');
-          content = JSON.parse(content.text);
+          //console.warn('Tool use detected in text content: ', JSON.stringify(content));
+          const [textPart, toolUsePart] = content.text.split('{"type":"tool_use"');
+          console.log(textPart.trim());
+          messages.push({ role: 'assistant', content: textPart.trim() });
+          content = JSON.parse('{"type":"tool_use"' + toolUsePart);
         } else {
           console.log(content.text);
+          messages.push({ role: 'assistant', content: content.text });
           continue;
         }
       }
