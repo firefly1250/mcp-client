@@ -27,20 +27,14 @@ class MCPClient {
 
   async connectToServer(serverScriptPath: string) {
     try {
-      const isJs = serverScriptPath.endsWith('.js');
-      const isPy = serverScriptPath.endsWith('.py');
-      if (!isJs && !isPy) {
-        throw new Error('Server script must be a .js or .py file');
+      const isTs = serverScriptPath.endsWith('.ts');
+      if (!isTs) {
+        throw new Error('Server script must be a .ts file');
       }
-      const command = isPy
-        ? process.platform === 'win32'
-          ? 'python'
-          : 'python3'
-        : process.execPath;
 
       this.transport = new StdioClientTransport({
-        command,
-        args: [serverScriptPath],
+        command: 'npx',
+        args: ['tsx', serverScriptPath],
       });
       this.mcp.connect(this.transport);
 
@@ -62,14 +56,7 @@ class MCPClient {
     }
   }
 
-  async processQuery(query: string) {
-    const messages: MessageParam[] = [
-      {
-        role: 'user',
-        content: query,
-      },
-    ];
-
+  async processQuery(messages: MessageParam[]) {
     const response = await this.anthropic.messages.create({
       model: 'claude-3-5-sonnet-20241022',
       max_tokens: 1000,
@@ -77,13 +64,17 @@ class MCPClient {
       tools: this.tools,
     });
 
-    const finalText = [];
-    const toolResults = [];
-
-    for (const content of response.content) {
+    for (let content of response.content) {
       if (content.type === 'text') {
-        finalText.push(content.text);
-      } else if (content.type === 'tool_use') {
+        if (content.text.includes('{"type":"tool_use"')) {
+          //console.warn('Tool use detected in text content');
+          content = JSON.parse(content.text);
+        } else {
+          console.log(content.text);
+          continue;
+        }
+      }
+      if (content.type === 'tool_use') {
         const toolName = content.name;
         const toolArgs = content.input as { [x: string]: unknown } | undefined;
 
@@ -91,26 +82,16 @@ class MCPClient {
           name: toolName,
           arguments: toolArgs,
         });
-        toolResults.push(result);
-        finalText.push(`[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`);
-
-        messages.push({
-          role: 'user',
-          content: result.content as string,
-        });
-
-        const response = await this.anthropic.messages.create({
-          model: 'claude-3-5-sonnet-20241022',
-          max_tokens: 1000,
-          messages,
-        });
-
-        finalText.push(response.content[0].type === 'text' ? response.content[0].text : '');
+        console.log(`[Calling tool ${toolName} with args ${JSON.stringify(toolArgs)}]`);
+        messages.push({ role: 'assistant', content: JSON.stringify(content) });
+        messages.push({ role: 'user', content: JSON.stringify(result.content) });
+        await this.processQuery(messages);
+        continue;
       }
+      console.warn('Unknown content type:', content.type);
     }
-
-    return finalText.join('\n');
   }
+
   async chatLoop() {
     const rl = readline.createInterface({
       input: process.stdin,
@@ -126,9 +107,10 @@ class MCPClient {
         if (message.toLowerCase() === 'quit') {
           break;
         }
-        const response = await this.processQuery(message);
-        console.log('\n' + response);
+        await this.processQuery([{ role: 'user', content: message }]);
       }
+    } catch (error) {
+      console.error('Error during chat loop:', error);
     } finally {
       rl.close();
     }
